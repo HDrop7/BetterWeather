@@ -1,2 +1,4 @@
 # BetterWeather
-A weather app for Android inspired by Apple Weather
+A weather app for Android inspired by Apple Weather.
+
+Using Kotlin/JVM.
