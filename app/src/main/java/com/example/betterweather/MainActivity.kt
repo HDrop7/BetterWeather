@@ -32,12 +32,31 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun WeatherApp() {
     val context = LocalContext.current
-    var permissionGranted by remember { mutableStateOf(false) }
+    var locationText by remember { mutableStateOf("Waiting for location...")}
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        permissionGranted = isGranted
+    val fusedLocationClient = remember {
+        com.google.android.gms.location.LocationServices
+            .getFusedLocationProviderClient(context)
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult (
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarseGranted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+
+        if (fineGranted  || coarseGranted) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                locationText = if (loc != null) {
+                    "Lat: ${loc.latitude}, Lng: ${loc.longitude}"
+                } else {
+                    "Location unavailable"
+                }
+            }
+        } else {
+            // permission denied
+            locationText = "Permission denied"
+        }
     }
 
     // Run once when the app launches
@@ -45,23 +64,35 @@ fun WeatherApp() {
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            permissionGranted = true
+            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                locationText = if (loc != null) {
+                    "Lat: ${loc.latitude}, Lng: ${loc.longitude}"
+                } else {
+                    "Location unavailable"
+                }
+            }
         } else {
-            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
         }
     }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
         Box(modifier = Modifier
             .padding(padding)
-            .padding(16.dp)) {
-            if (permissionGranted) {
-                Text("Permission granted. Next: get location.")
-            } else {
-                Text("Waiting for location permission...")
-            }
+            .padding(16.dp)
+            ) {
+            Text(locationText)
         }
     }
 }
