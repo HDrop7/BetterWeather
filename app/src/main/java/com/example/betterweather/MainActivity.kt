@@ -8,14 +8,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.material3.*
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.betterweather.ui.theme.BetterWeatherTheme
+import com.example.betterweather.BuildConfig
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +34,7 @@ class MainActivity : ComponentActivity() {
 fun WeatherApp() {
     val context = LocalContext.current
     var locationText by remember { mutableStateOf("Waiting for location...")}
+    var temperature by remember { mutableStateOf<Double?>(null) }
 
     val fusedLocationClient = remember {
         com.google.android.gms.location.LocationServices
@@ -54,8 +56,25 @@ fun WeatherApp() {
                 }
             }
         } else {
-            // permission denied
             locationText = "Permission denied"
+        }
+    }
+
+    // Use a separate thread to get the temperature
+    val coroutineScope = rememberCoroutineScope()
+
+    fun fetchTemperature(lat: Double, lon: Double) {
+        coroutineScope.launch {
+            val apiKey = BuildConfig.OPENWEATHER_API_KEY
+
+            val temp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                WeatherUtil.getTemperature(lat, lon, apiKey)
+            }
+            if (temp != null) {
+                temperature = temp
+            } else {
+                locationText = "Failed to get temperature"
+            }
         }
     }
 
@@ -71,10 +90,11 @@ fun WeatherApp() {
             ) == PackageManager.PERMISSION_GRANTED
         ) {
             fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
-                locationText = if (loc != null) {
-                    "Lat: ${loc.latitude}, Lng: ${loc.longitude}"
+                if (loc != null) {
+                    locationText = "Lat: ${loc.latitude}, Lng: ${loc.longitude}"
+                    fetchTemperature(loc.latitude, loc.longitude)
                 } else {
-                    "Location unavailable"
+                    locationText = "Location unavailable"
                 }
             }
         } else {
@@ -92,7 +112,10 @@ fun WeatherApp() {
             .padding(padding)
             .padding(16.dp)
             ) {
-            Text(locationText)
+            when {
+                temperature != null -> Text("Temperature: ${temperature}°F")
+                else -> Text(locationText)
+            }
         }
     }
 }
